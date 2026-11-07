@@ -1,0 +1,279 @@
+:root {
+  --paper: #f6f5ed;
+  --ink: #1a1a1a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--paper);
+}
+
+body {
+  margin: 0 auto;
+  max-width: 40rem;
+  padding: 3rem 1.5rem 4.5rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Palatino Linotype", Palatino, "Liberation Serif", "Times New Roman", Times, serif;
+  font-size: 1.125rem;
+  line-height: 1.65;
+}
+
+::selection {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+a {
+  color: inherit;
+}
+
+a:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.wordmark {
+  margin: 0 0 1.1rem;
+  font-size: 1.85rem;
+  font-weight: normal;
+  letter-spacing: 0.18em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.wordmark a {
+  color: inherit;
+  text-decoration: none;
+}
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.35rem;
+  margin: 0 0 2.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--ink);
+}
+
+nav a {
+  padding: 0.35rem 0;
+  font-size: 0.92rem;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+nav a[aria-current="page"],
+nav a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.35em;
+}
+
+h1 {
+  margin: 0 0 1.25rem;
+  font-size: 1.55rem;
+  font-weight: normal;
+  letter-spacing: 0.16em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.place,
+.methods {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.place {
+  margin-bottom: 1.5rem;
+}
+
+.services {
+  margin: 0 0 2rem;
+  padding-left: 1.25rem;
+}
+
+.services li {
+  margin: 0.2rem 0;
+}
+
+.services a {
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.services a:hover,
+.services a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.topiary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.4rem 1.6rem;
+  margin: 0.25rem 0 2.25rem;
+  padding: 4rem 0 0 1.15rem;
+}
+
+.ball {
+  position: relative;
+  display: block;
+  width: 1rem;
+  height: 1.15rem;
+  border: 1.5px solid var(--ink);
+  border-top: 0;
+}
+
+.ball::before,
+.ball::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.ball::after {
+  bottom: 100%;
+  width: 1.5px;
+  height: 0.65rem;
+  background: var(--ink);
+}
+
+.ball::before {
+  bottom: calc(100% + 0.65rem);
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.ball.l::before {
+  width: 3rem;
+  height: 3rem;
+}
+
+.flyer {
+  margin: 0 0 2rem;
+}
+
+.flyer img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--ink);
+}
+
+.flyer figcaption {
+  margin-top: 0.55rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.intro {
+  margin: 0 0 0.5rem;
+}
+
+.project {
+  margin: 0;
+  padding: 1.6rem 0;
+  border-top: 1px solid var(--ink);
+}
+
+.project:last-of-type {
+  border-bottom: 1px solid var(--ink);
+}
+
+.project h2 {
+  margin: 0 0 0.45rem;
+  font-size: 1.15rem;
+  font-weight: normal;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.project p {
+  margin: 0;
+}
+
+.contact {
+  margin: 0;
+}
+
+.contact dt {
+  margin-top: 1.35rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.contact dd {
+  margin: 0.15rem 0 0;
+}
+
+.contact a {
+  text-underline-offset: 0.15em;
+}
+
+footer {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ink);
+  font-size: 1rem;
+}
+
+footer p {
+  margin: 0.2rem 0;
+}
+
+footer a {
+  text-underline-offset: 0.15em;
+}
+
+@media (max-width: 36rem) {
+  body {
+    padding: 1.75rem 1.15rem 3rem;
+    font-size: 1.0625rem;
+  }
+
+  .wordmark {
+    font-size: 1.45rem;
+    letter-spacing: 0.12em;
+  }
+
+  h1 {
+    font-size: 1.35rem;
+    letter-spacing: 0.1em;
+  }
+
+  nav {
+    gap: 0.15rem 1rem;
+  }
+}
+
+@media print {
+  body {
+    max-width: none;
+    padding: 0;
+    background: white;
+    color: black;
+  }
+
+  nav {
+    display: none;
+  }
+
+  a {
+    text-decoration: none;
+  }
+}
