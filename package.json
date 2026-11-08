@@ -1,0 +1,16 @@
+{
+  "name": "shaw-gardens",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "build": "node scripts/migrate.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.14",
+    "pg": "^8.16.3"
+  }
+}
