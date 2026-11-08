@@ -9,40 +9,95 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <header>
-    <h1 class="wordmark"><a href="index.html">Shaw Gardens</a></h1>
-    <nav aria-label="Pages">
-      <a href="index.html" aria-current="page">Home</a>
-      <a href="projects.html">Projects</a>
-      <a href="about.html">About</a>
-      <a href="contact.html">Contact</a>
+  <header id="home">
+    <h1 class="wordmark"><a href="#home">Shaw Gardens</a></h1>
+    <nav aria-label="On this page">
+      <a href="#home">Home</a>
+      <a href="#projects">Projects</a>
+      <a href="#about">About</a>
+      <a href="#contact">Contact</a>
     </nav>
   </header>
 
   <main>
-    <p class="place">Mount Victoria based, covering Wellington and Hutt Cities</p>
+    <section class="sheet" aria-label="Home">
+      <p class="place">Mount Victoria based, covering Wellington and Hutt Cities</p>
 
-    <ul class="services">
-      <li><a href="projects.html#maintenance">Maintenance</a></li>
-      <li><a href="projects.html#landscaping">Landscaping</a></li>
-      <li><a href="projects.html#lawncare">Lawncare</a></li>
-      <li><a href="projects.html#topiary">Topiary</a></li>
-      <li><a href="projects.html#design">Design</a></li>
-    </ul>
+      <ul class="services">
+        <li><a href="#maintenance">Maintenance</a></li>
+        <li><a href="#landscaping">Landscaping</a></li>
+        <li><a href="#lawncare">Lawncare</a></li>
+        <li><a href="#topiary">Topiary</a></li>
+        <li><a href="#design">Design</a></li>
+      </ul>
 
-    <div class="topiary" aria-hidden="true">
-      <span class="ball"></span>
-      <span class="ball l"></span>
-      <span class="ball"></span>
-      <span class="ball l"></span>
-    </div>
+      <div class="topiary" aria-hidden="true">
+        <span class="ball"></span>
+        <span class="ball l"></span>
+        <span class="ball"></span>
+        <span class="ball l"></span>
+      </div>
 
-    <figure class="flyer">
-      <img src="images/shaw-gardens-flyer.jpg" width="1408" height="768" alt="Hand-drawn Shaw Gardens flyer on cream paper. It lists maintenance, landscaping, lawncare, topiary, and design beside sketches of plants, steps, and potted topiary. The bottom line gives Tom’s email and telephone number.">
-      <figcaption>The flyer</figcaption>
-    </figure>
+      <figure class="flyer">
+        <img src="images/shaw-gardens-flyer.jpg" width="1408" height="768" alt="Hand-drawn Shaw Gardens flyer on cream paper. It lists maintenance, landscaping, lawncare, topiary, and design beside sketches of plants, steps, and potted topiary. The bottom line gives Tom’s email and telephone number.">
+        <figcaption>The flyer</figcaption>
+      </figure>
 
-    <p class="methods">Organic methods, native plants</p>
+      <p class="methods">Organic methods, native plants</p>
+    </section>
+
+    <section class="sheet" id="projects" aria-labelledby="projects-title">
+      <h2 id="projects-title">Projects</h2>
+      <p class="intro">Five kinds of garden work, for Wellington and Hutt Cities.</p>
+
+      <section class="project" id="maintenance">
+        <h3>Maintenance</h3>
+        <p>Ongoing care of a garden already in the ground: weeding, pruning, clearing, and keeping beds in order through the seasons. The work uses organic methods.</p>
+      </section>
+
+      <section class="project" id="landscaping">
+        <h3>Landscaping</h3>
+        <p>Laying out and planting a garden: beds, edges, and the plants that fill them, including native plants.</p>
+      </section>
+
+      <section class="project" id="lawncare">
+        <h3>Lawncare</h3>
+        <p>Mowing, edging, and the regular care of lawns, done with organic methods.</p>
+      </section>
+
+      <section class="project" id="topiary">
+        <h3>Topiary</h3>
+        <p>Clipping and looking after plants trained into a clear shape, such as hedges and rounded forms.</p>
+      </section>
+
+      <section class="project" id="design">
+        <h3>Design</h3>
+        <p>Planning where a garden sits and what is planted in it. Organic methods and native plants guide the choices.</p>
+      </section>
+    </section>
+
+    <section class="sheet" id="about" aria-labelledby="about-title">
+      <h2 id="about-title">About</h2>
+      <p>Shaw Gardens is based in Mount Victoria and covers Wellington and Hutt Cities.</p>
+      <p>The work is maintenance, landscaping, lawncare, topiary, and design. Methods are organic, and the planting favours native plants.</p>
+      <p>Talk to Tom about a garden.</p>
+    </section>
+
+    <section class="sheet" id="contact" aria-labelledby="contact-title">
+      <h2 id="contact-title">Contact</h2>
+      <p>For garden work in Wellington and Hutt Cities, contact Tom.</p>
+
+      <dl class="contact">
+        <dt>Name</dt>
+        <dd>Tom</dd>
+        <dt>Email</dt>
+        <dd><a href="mailto:shawgardens@gmail.com">shawgardens@gmail.com</a></dd>
+        <dt>Telephone</dt>
+        <dd><a href="tel:+642108378589">021 083 78589</a></dd>
+        <dt>Based</dt>
+        <dd>Mount Victoria, covering Wellington and Hutt Cities</dd>
+      </dl>
+    </section>
   </main>
 
   <footer>

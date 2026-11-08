@@ -9,12 +9,19 @@
 
 html {
   background: var(--paper);
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 body {
   margin: 0 auto;
   max-width: 40rem;
-  padding: 3rem 1.5rem 4.5rem;
+  padding: 3rem 1.5rem 45vh;
   background: var(--paper);
   color: var(--ink);
   font-family: "Palatino Linotype", Palatino, "Liberation Serif", "Times New Roman", Times, serif;
@@ -73,13 +80,30 @@ nav a:hover {
   text-underline-offset: 0.35em;
 }
 
-h1 {
+.sheet {
+  scroll-margin-top: 1.25rem;
+}
+
+.sheet + .sheet {
+  margin-top: 2.75rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid var(--ink);
+}
+
+.sheet > h2 {
   margin: 0 0 1.25rem;
   font-size: 1.55rem;
   font-weight: normal;
   letter-spacing: 0.16em;
   line-height: 1.25;
   text-transform: uppercase;
+}
+
+#projects,
+#about,
+#contact,
+.project {
+  scroll-margin-top: 1.25rem;
 }
 
 .place,
@@ -194,7 +218,7 @@ h1 {
   border-bottom: 1px solid var(--ink);
 }
 
-.project h2 {
+.project h3 {
   margin: 0 0 0.45rem;
   font-size: 1.15rem;
   font-weight: normal;
@@ -242,7 +266,7 @@ footer a {
 
 @media (max-width: 36rem) {
   body {
-    padding: 1.75rem 1.15rem 3rem;
+    padding: 1.75rem 1.15rem 45vh;
     font-size: 1.0625rem;
   }
 
@@ -251,7 +275,7 @@ footer a {
     letter-spacing: 0.12em;
   }
 
-  h1 {
+  .sheet > h2 {
     font-size: 1.35rem;
     letter-spacing: 0.1em;
   }
