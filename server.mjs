@@ -3,7 +3,7 @@ import { chdir } from "node:process";
 import { createServer } from "node:http";
 
 chdir(fileURLToPath(new URL(".", import.meta.url)));
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { extname, normalize, resolve, sep } from "node:path";
 import { readFile } from "node:fs/promises";
 import { asBuffer, sql } from "./src/db.mjs";
@@ -48,12 +48,19 @@ const staticTypes = new Map([
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const pagesOrigin = "https://peterss.github.io";
 
+const previewPage = "https://peterss.github.io/shaw-gardens/preview/";
+
 function pagesRead(req, headers) {
   const shared = { Vary: "Origin", ...headers };
   if (req.headers.origin === pagesOrigin) {
     shared["Access-Control-Allow-Origin"] = pagesOrigin;
+    shared["Access-Control-Allow-Credentials"] = "true";
   }
   return shared;
+}
+
+function previewCaller(req) {
+  return req.headers.origin === pagesOrigin || sameOrigin(req);
 }
 
 function send(res, status, body, headers = {}) {
@@ -81,6 +88,13 @@ function html(res, status, body, extra = {}) {
 
 function text(res, status, body) {
   send(res, status, body, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+}
+
+function deny(req, res) {
+  send(res, 401, "Sign in required.", pagesRead(req, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "private, no-store",
+  }));
 }
 
 async function readRaw(req) {
@@ -212,16 +226,6 @@ async function media(req, res, id, which) {
   sendImage(req, res, await publishedImage(id, which), "public, max-age=3600");
 }
 
-function previewAuthorized(req) {
-  const expected = process.env.PREVIEW_TOKEN ?? "";
-  if (expected.length === 0) return false;
-  const header = String(req.headers.authorization ?? "");
-  const given = header.startsWith("Bearer ") ? header.slice(7) : "";
-  const left = createHash("sha256").update(given, "utf8").digest();
-  const right = createHash("sha256").update(expected, "utf8").digest();
-  return timingSafeEqual(left, right);
-}
-
 async function draftImage(id, which) {
   if (!UUID.test(id) || (which !== "before" && which !== "after")) return null;
   const rows = which === "before"
@@ -328,6 +332,8 @@ async function login(req, res) {
     return;
   }
   const data = await formData(req);
+  const next = String(data.get("next") || "");
+  const dest = next === previewPage ? previewPage : "/maintain";
   const password = String(data.get("password") || "");
   if (!passwordConfigured()) {
     redirect(res, "/maintain?error=unconfigured");
@@ -335,11 +341,11 @@ async function login(req, res) {
   }
   if (!passwordMatches(password)) {
     loginFailed(ip);
-    redirect(res, "/maintain?error=rejected");
+    redirect(res, next === previewPage ? `/maintain?error=rejected&next=${encodeURIComponent(previewPage)}` : "/maintain?error=rejected");
     return;
   }
   const token = sealSession();
-  redirect(res, "/maintain", { "Set-Cookie": sessionCookie(token, req) });
+  redirect(res, dest, { "Set-Cookie": sessionCookie(token, req) });
 }
 
 function staticPath(urlPath) {
@@ -383,35 +389,43 @@ const server = createServer(async (req, res) => {
       await publicProjects(req, res);
       return;
     }
-    if (req.method === "GET" && path === "/api/edition") {
-      if (!previewAuthorized(req)) {
-        text(res, 401, "Unauthorized");
+    if (req.method === "OPTIONS" && req.headers.origin === pagesOrigin) {
+      send(res, 204, "", pagesRead(req, {
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Accept",
+        "Access-Control-Max-Age": "600",
+      }));
+      return;
+    }
+    if (req.method === "GET" && path === "/api/draft") {
+      if (!authed || !previewCaller(req)) {
+        deny(req, res);
         return;
       }
       const current = await pointer();
       send(res, 200, JSON.stringify({
         projects: JSON.parse(projectJson(await listProjects())),
         previous: Boolean(current.previous_id),
-      }), {
+      }), pagesRead(req, {
         "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "private, no-store",
-      });
+      }));
       return;
     }
-    const editionMedia = path.match(/^\/api\/edition\/media\/([^/]+)\/(before|after)$/);
-    if (req.method === "GET" && editionMedia) {
-      if (!previewAuthorized(req)) {
-        text(res, 401, "Unauthorized");
+    const draftMatch = path.match(/^\/draft\/media\/([^/]+)\/(before|after)$/);
+    if (req.method === "GET" && draftMatch) {
+      if (!authed || !previewCaller(req)) {
+        deny(req, res);
         return;
       }
-      const row = await draftImage(editionMedia[1], editionMedia[2]);
+      const row = await draftImage(draftMatch[1], draftMatch[2]);
       const image = asBuffer(row?.image);
       const type = row?.type;
       if (!image || !type || !["image/jpeg", "image/png", "image/gif", "image/webp"].includes(type)) {
         text(res, 404, "Not found");
         return;
       }
-      send(res, 200, image, { "Content-Type": type, "Cache-Control": "private, no-store" });
+      send(res, 200, image, pagesRead(req, { "Content-Type": type, "Cache-Control": "private, no-store" }));
       return;
     }
     const mediaMatch = path.match(/^\/media\/([^/]+)\/(before|after)$/);
@@ -420,21 +434,26 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET" && (path === "/maintain" || path === "/maintain.html")) {
+      const next = url.searchParams.get("next") || "";
       if (!authed) {
-        html(res, 200, loginPage(url.searchParams.get("error") || ""));
+        html(res, 200, loginPage(url.searchParams.get("error") || "", next === previewPage ? next : ""));
+        return;
+      }
+      if (next === previewPage) {
+        redirect(res, previewPage);
         return;
       }
       html(res, 200, editorPage(await listProjects(), url.searchParams.get("error") || ""));
       return;
     }
-    if (req.method === "POST" && (path === "/api/edition/publish" || path === "/api/edition/revert")) {
-      if (!previewAuthorized(req)) {
-        text(res, 401, "Unauthorized");
+    if (req.method === "POST" && (path === "/api/publish" || path === "/api/revert")) {
+      if (!authed || !previewCaller(req)) {
+        deny(req, res);
         return;
       }
-      if (path === "/api/edition/publish") await publishDraft();
+      if (path === "/api/publish") await publishDraft();
       else await revertLive();
-      send(res, 204, "", { "Cache-Control": "no-store" });
+      send(res, 204, "", pagesRead(req, { "Cache-Control": "no-store" }));
       return;
     }
     if (req.method === "POST") {

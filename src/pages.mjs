@@ -36,7 +36,9 @@ function shell(title, main) {
 </html>`;
 }
 
-export function loginPage(error) {
+const previewPage = "https://peterss.github.io/shaw-gardens/preview/";
+
+export function loginPage(error, next) {
   const message = error === "unconfigured"
     ? "<p class=\"form-error\">Sign-in is not configured yet. Set the maintenance password on the server, then try again.</p>"
     : error === "limited"
@@ -44,11 +46,13 @@ export function loginPage(error) {
       : error
         ? "<p class=\"form-error\">That password was not accepted.</p>"
         : "";
+  const nextField = next === previewPage ? `<input type="hidden" name="next" value="${esc(previewPage)}">` : "";
   return shell("Maintain · Shaw Gardens", `
     <h1>Maintain</h1>
-    <p>For Tom. Saved changes show on the private preview of the site. Publish Live is on that preview.</p>
+    <p>For Tom. Saved changes show on the GitHub Pages preview. Publish Live is on that page.</p>
     ${message}
     <form class="maintain" method="post" action="/maintain/login" autocomplete="off">
+      ${nextField}
       <label for="password">Password</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required>
       <button type="submit">Sign in</button>
@@ -110,7 +114,8 @@ export function editorPage(projects, error) {
   `).join("");
   return shell("Maintain · Shaw Gardens", `
     <h1>Maintain</h1>
-    <p>Notes, recommendations, and pictures saved here update the private preview of the site. The public site changes from Publish Live on that preview.</p>
+    <p>Notes, recommendations, and pictures saved here show on the GitHub Pages preview. The public site changes from Publish Live on that page.</p>
+    <p><a href="https://peterss.github.io/shaw-gardens/preview/">Open the preview</a></p>
     ${message}
     <form method="post" action="/maintain/logout">
       <button type="submit">Sign out</button>

@@ -51,23 +51,25 @@ export function readSession(req) {
   return false;
 }
 
+function cookieFlags(req) {
+  const proto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim().toLowerCase();
+  if (proto === "https") return ["SameSite=None", "Secure"];
+  return ["SameSite=Lax"];
+}
+
 export function sessionCookie(token, req) {
-  const secure = req.headers["x-forwarded-proto"] === "https";
   const bits = [
     `${COOKIE}=${encodeURIComponent(token)}`,
     "HttpOnly",
-    "SameSite=Strict",
+    ...cookieFlags(req),
     "Path=/",
     `Max-Age=${Math.floor(FOURTEEN_DAYS / 1000)}`,
   ];
-  if (secure) bits.push("Secure");
   return bits.join("; ");
 }
 
 export function clearCookie(req) {
-  const secure = req.headers["x-forwarded-proto"] === "https";
-  const bits = [`${COOKIE}=`, "HttpOnly", "SameSite=Strict", "Path=/", "Max-Age=0"];
-  if (secure) bits.push("Secure");
+  const bits = [`${COOKIE}=`, "HttpOnly", ...cookieFlags(req), "Path=/", "Max-Age=0"];
   return bits.join("; ");
 }
 

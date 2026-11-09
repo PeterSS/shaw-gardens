@@ -4,13 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <title>Shaw Gardens</title>
+  <title>Preview · Shaw Gardens</title>
   <meta name="description" content="Shaw Gardens, based in Mount Victoria, covering Wellington and Hutt Cities. Maintenance, landscaping, lawncare, topiary, and design. Organic methods and native plants.">
-  <link rel="icon" href="images/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="../images/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
-  <div id="preview-bar"></div>
+  <div class="preview-bar">
+    <p>This is the preview. The public site changes only when you publish.</p>
+    <p id="preview-status"></p>
+    <button type="button" id="publish-live">Publish Live</button>
+    <button type="button" id="revert-live" hidden>Revert to previous version</button>
+    <p><a id="sign-in" hidden href="https://shaw-gardens.apps.grok.bot/maintain?next=https%3A%2F%2Fpeterss.github.io%2Fshaw-gardens%2Fpreview%2F">Sign in to publish</a></p>
+  </div>
   <header id="home">
     <h1 class="wordmark"><a href="#home">Shaw Gardens</a></h1>
     <nav aria-label="On this page">
@@ -41,7 +47,7 @@
       </div>
 
       <figure class="flyer">
-        <img src="images/shaw-gardens-flyer.jpg" width="1408" height="768" alt="Hand-drawn Shaw Gardens flyer on cream paper. It lists maintenance, landscaping, lawncare, topiary, and design beside sketches of plants, steps, and potted topiary. The bottom line gives Tom’s email and telephone number.">
+        <img src="../images/shaw-gardens-flyer.jpg" width="1408" height="768" alt="Hand-drawn Shaw Gardens flyer on cream paper. It lists maintenance, landscaping, lawncare, topiary, and design beside sketches of plants, steps, and potted topiary. The bottom line gives Tom’s email and telephone number.">
         <figcaption>The flyer</figcaption>
       </figure>
 
@@ -112,5 +118,6 @@
     <p><a href="tel:+642108378589">021 083 78589</a></p>
     <p><a href="https://shaw-gardens.apps.grok.bot/maintain">Maintain</a></p>
   </footer>
+  <script src="../js/preview-page.js"></script>
 </body>
 </html>
