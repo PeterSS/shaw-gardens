@@ -3,7 +3,7 @@ import { chdir } from "node:process";
 import { createServer } from "node:http";
 
 chdir(fileURLToPath(new URL(".", import.meta.url)));
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { extname, normalize, resolve, sep } from "node:path";
 import { readFile } from "node:fs/promises";
 import { asBuffer, sql } from "./src/db.mjs";
@@ -212,42 +212,22 @@ async function media(req, res, id, which) {
   sendImage(req, res, await publishedImage(id, which), "public, max-age=3600");
 }
 
-async function draftMedia(req, res, id, which) {
-  if (!UUID.test(id) || (which !== "before" && which !== "after")) {
-    text(res, 404, "Not found");
-    return;
-  }
+function previewAuthorized(req) {
+  const expected = process.env.PREVIEW_TOKEN ?? "";
+  if (expected.length === 0) return false;
+  const header = String(req.headers.authorization ?? "");
+  const given = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const left = createHash("sha256").update(given, "utf8").digest();
+  const right = createHash("sha256").update(expected, "utf8").digest();
+  return timingSafeEqual(left, right);
+}
+
+async function draftImage(id, which) {
+  if (!UUID.test(id) || (which !== "before" && which !== "after")) return null;
   const rows = which === "before"
     ? await sql("select before_image as image, before_type as type from projects where id = $1", [id])
     : await sql("select after_image as image, after_type as type from projects where id = $1", [id]);
-  sendImage(req, res, rows[0], "private, no-store");
-}
-
-async function renderPreview(notice, hasPrevious) {
-  const html = await readFile(resolve(root, "index.html"), "utf8");
-  const note = notice === "published"
-    ? "The public site now shows this version."
-    : notice === "reverted"
-      ? "The public site is back on the previous version."
-      : "This preview is private. The public site changes only when you publish.";
-  const revert = hasPrevious
-    ? `<form method="post" action="/maintain/revert" onsubmit="return confirm('Put the previous public version back?')">
-        <button type="submit">Revert to previous version</button>
-      </form>`
-    : "";
-  const bar = `<div class="preview-bar">
-    <p>${note}</p>
-    <form method="post" action="/maintain/publish" onsubmit="return confirm('Publish this preview on the public site?')">
-      <button type="submit">Publish Live</button>
-    </form>
-    ${revert}
-    <p><a href="/maintain">Maintain</a></p>
-  </div>`;
-  return html
-    .replace("<body>", '<body data-preview="true">')
-    .replace('id="coming-soon"', 'id="coming-soon" hidden')
-    .replace('id="site" hidden', 'id="site"')
-    .replace("<div id=\"site\">", `<div id="site">${bar}`);
+  return rows[0] || null;
 }
 
 async function saveProject(req, res) {
@@ -348,26 +328,25 @@ async function login(req, res) {
     return;
   }
   const data = await formData(req);
-  const next = String(data.get("next") || "");
-  const back = next === "/preview" ? "/preview" : "/maintain";
   const password = String(data.get("password") || "");
   if (!passwordConfigured()) {
-    redirect(res, `${back}?error=unconfigured`);
+    redirect(res, "/maintain?error=unconfigured");
     return;
   }
   if (!passwordMatches(password)) {
     loginFailed(ip);
-    redirect(res, `${back}?error=rejected`);
+    redirect(res, "/maintain?error=rejected");
     return;
   }
   const token = sealSession();
-  redirect(res, back, { "Set-Cookie": sessionCookie(token, req) });
+  redirect(res, "/maintain", { "Set-Cookie": sessionCookie(token, req) });
 }
 
 function staticPath(urlPath) {
   const decoded = decodeURIComponent(urlPath.split("?")[0]);
   const cleaned = normalize(decoded).replace(/^(\.\.(\/|\\|$))+/, "");
   const relative = cleaned.replace(/^[/\\]+/, "");
+  if (relative === "_preview" || relative.startsWith(`_preview${sep}`) || relative.startsWith("_preview/")) return null;
   const full = resolve(root, relative);
   if (full !== root && !full.startsWith(root + sep)) return null;
   const ext = extname(full).toLowerCase();
@@ -404,38 +383,40 @@ const server = createServer(async (req, res) => {
       await publicProjects(req, res);
       return;
     }
-    if (req.method === "GET" && path === "/api/draft") {
-      if (!authed) {
-        text(res, 401, "Sign in required.");
+    if (req.method === "GET" && path === "/api/edition") {
+      if (!previewAuthorized(req)) {
+        text(res, 401, "Unauthorized");
         return;
       }
-      send(res, 200, projectJson(await listProjects()), {
+      const current = await pointer();
+      send(res, 200, JSON.stringify({
+        projects: JSON.parse(projectJson(await listProjects())),
+        previous: Boolean(current.previous_id),
+      }), {
         "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "private, no-store",
       });
       return;
     }
+    const editionMedia = path.match(/^\/api\/edition\/media\/([^/]+)\/(before|after)$/);
+    if (req.method === "GET" && editionMedia) {
+      if (!previewAuthorized(req)) {
+        text(res, 401, "Unauthorized");
+        return;
+      }
+      const row = await draftImage(editionMedia[1], editionMedia[2]);
+      const image = asBuffer(row?.image);
+      const type = row?.type;
+      if (!image || !type || !["image/jpeg", "image/png", "image/gif", "image/webp"].includes(type)) {
+        text(res, 404, "Not found");
+        return;
+      }
+      send(res, 200, image, { "Content-Type": type, "Cache-Control": "private, no-store" });
+      return;
+    }
     const mediaMatch = path.match(/^\/media\/([^/]+)\/(before|after)$/);
     if (req.method === "GET" && mediaMatch) {
       await media(req, res, mediaMatch[1], mediaMatch[2]);
-      return;
-    }
-    const draftMatch = path.match(/^\/draft\/media\/([^/]+)\/(before|after)$/);
-    if (req.method === "GET" && draftMatch) {
-      if (!authed) {
-        text(res, 401, "Sign in required.");
-        return;
-      }
-      await draftMedia(req, res, draftMatch[1], draftMatch[2]);
-      return;
-    }
-    if (req.method === "GET" && path === "/preview") {
-      if (!authed) {
-        html(res, 200, loginPage(url.searchParams.get("error") || "", "/preview"));
-        return;
-      }
-      const current = await pointer();
-      html(res, 200, await renderPreview(url.searchParams.get("notice") || "", Boolean(current.previous_id)));
       return;
     }
     if (req.method === "GET" && (path === "/maintain" || path === "/maintain.html")) {
@@ -444,6 +425,16 @@ const server = createServer(async (req, res) => {
         return;
       }
       html(res, 200, editorPage(await listProjects(), url.searchParams.get("error") || ""));
+      return;
+    }
+    if (req.method === "POST" && (path === "/api/edition/publish" || path === "/api/edition/revert")) {
+      if (!previewAuthorized(req)) {
+        text(res, 401, "Unauthorized");
+        return;
+      }
+      if (path === "/api/edition/publish") await publishDraft();
+      else await revertLive();
+      send(res, 204, "", { "Cache-Control": "no-store" });
       return;
     }
     if (req.method === "POST") {
@@ -461,16 +452,6 @@ const server = createServer(async (req, res) => {
       }
       if (path === "/maintain/logout") {
         redirect(res, "/maintain", { "Set-Cookie": clearCookie(req) });
-        return;
-      }
-      if (path === "/maintain/publish") {
-        await publishDraft();
-        redirect(res, "/preview?notice=published");
-        return;
-      }
-      if (path === "/maintain/revert") {
-        const restored = await revertLive();
-        redirect(res, restored ? "/preview?notice=reverted" : "/preview");
         return;
       }
       if (path === "/maintain/save") {
