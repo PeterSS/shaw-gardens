@@ -71,24 +71,39 @@ export function clearCookie(req) {
   return bits.join("; ");
 }
 
-export function sameOrigin(req) {
-  const host = req.headers.host;
-  if (!host) return false;
-  const origin = req.headers.origin;
-  if (origin) {
-    try {
-      return new URL(origin).host === host;
-    } catch {
-      return false;
-    }
-  }
-  const referer = req.headers.referer;
-  if (!referer) return false;
+function firstHeader(value) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return String(raw ?? "").split(",")[0].trim();
+}
+
+function hostIdentity(value) {
+  const raw = firstHeader(value);
+  if (!raw) return "";
   try {
-    return new URL(referer).host === host;
+    return new URL(raw.includes("://") ? raw : `https://${raw}`).host.toLowerCase();
   } catch {
-    return false;
+    return "";
   }
+}
+
+function originHost(value) {
+  if (!value) return "";
+  try {
+    return new URL(value).host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+export function sameOrigin(req) {
+  const site = firstHeader(req.headers["sec-fetch-site"]).toLowerCase();
+  if (site === "same-origin") return true;
+  if (site === "cross-site" || site === "same-site") return false;
+
+  const expected = originHost(req.headers.origin || req.headers.referer);
+  if (!expected) return false;
+  const candidates = [hostIdentity(req.headers.host), hostIdentity(req.headers["x-forwarded-host"])];
+  return candidates.some((host) => host !== "" && host === expected);
 }
 
 const attempts = new Map();
