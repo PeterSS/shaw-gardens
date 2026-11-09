@@ -19,6 +19,14 @@ import {
   sessionCookie,
 } from "./src/auth.mjs";
 import { editorPage, loginPage } from "./src/pages.mjs";
+import {
+  liveStatus,
+  pointer,
+  publishDraft,
+  publishedImage,
+  publishedProjects,
+  revertLive,
+} from "./src/editions.mjs";
 
 const root = resolve(process.cwd());
 const port = Number(process.env.PORT) || 8787;
@@ -155,9 +163,8 @@ async function listProjects() {
   }));
 }
 
-async function publicProjects(req, res) {
-  const projects = await listProjects();
-  send(res, 200, JSON.stringify(projects.map((project) => ({
+function projectJson(projects) {
+  return JSON.stringify(projects.map((project) => ({
     id: project.id,
     title: project.title,
     notes: project.notes,
@@ -165,9 +172,35 @@ async function publicProjects(req, res) {
     before: project.before,
     after: project.after,
     updatedAt: project.updatedAt,
-  }))), pagesRead(req, {
+  })));
+}
+
+async function publicProjects(req, res) {
+  const projects = await publishedProjects();
+  send(res, 200, projectJson(projects), pagesRead(req, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+  }));
+}
+
+async function liveState(req, res) {
+  const live = await liveStatus();
+  send(res, 200, JSON.stringify({ kind: live.kind === "site" ? "site" : "coming-soon" }), pagesRead(req, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+  }));
+}
+
+function sendImage(req, res, row, cache) {
+  const image = asBuffer(row?.image);
+  const type = row?.type;
+  if (!image || !type || !["image/jpeg", "image/png", "image/gif", "image/webp"].includes(type)) {
+    text(res, 404, "Not found");
+    return;
+  }
+  send(res, 200, image, pagesRead(req, {
+    "Content-Type": type,
+    "Cache-Control": cache,
   }));
 }
 
@@ -176,19 +209,45 @@ async function media(req, res, id, which) {
     text(res, 404, "Not found");
     return;
   }
-  const rows = which === "before"
-    ? await sql("select before_image as image, before_type as type from projects where id = $1", [id])
-    : await sql("select after_image as image, after_type as type from projects where id = $1", [id]);
-  const image = asBuffer(rows[0]?.image);
-  const type = rows[0]?.type;
-  if (!image || !type || !["image/jpeg", "image/png", "image/gif", "image/webp"].includes(type)) {
+  sendImage(req, res, await publishedImage(id, which), "public, max-age=3600");
+}
+
+async function draftMedia(req, res, id, which) {
+  if (!UUID.test(id) || (which !== "before" && which !== "after")) {
     text(res, 404, "Not found");
     return;
   }
-  send(res, 200, image, pagesRead(req, {
-    "Content-Type": type,
-    "Cache-Control": "public, max-age=3600",
-  }));
+  const rows = which === "before"
+    ? await sql("select before_image as image, before_type as type from projects where id = $1", [id])
+    : await sql("select after_image as image, after_type as type from projects where id = $1", [id]);
+  sendImage(req, res, rows[0], "private, no-store");
+}
+
+async function renderPreview(notice, hasPrevious) {
+  const html = await readFile(resolve(root, "index.html"), "utf8");
+  const note = notice === "published"
+    ? "The public site now shows this version."
+    : notice === "reverted"
+      ? "The public site is back on the previous version."
+      : "This preview is private. The public site changes only when you publish.";
+  const revert = hasPrevious
+    ? `<form method="post" action="/maintain/revert" onsubmit="return confirm('Put the previous public version back?')">
+        <button type="submit">Revert to previous version</button>
+      </form>`
+    : "";
+  const bar = `<div class="preview-bar">
+    <p>${note}</p>
+    <form method="post" action="/maintain/publish" onsubmit="return confirm('Publish this preview on the public site?')">
+      <button type="submit">Publish Live</button>
+    </form>
+    ${revert}
+    <p><a href="/maintain">Maintain</a></p>
+  </div>`;
+  return html
+    .replace("<body>", '<body data-preview="true">')
+    .replace('id="coming-soon"', 'id="coming-soon" hidden')
+    .replace('id="site" hidden', 'id="site"')
+    .replace("<div id=\"site\">", `<div id="site">${bar}`);
 }
 
 async function saveProject(req, res) {
@@ -289,18 +348,20 @@ async function login(req, res) {
     return;
   }
   const data = await formData(req);
+  const next = String(data.get("next") || "");
+  const back = next === "/preview" ? "/preview" : "/maintain";
   const password = String(data.get("password") || "");
   if (!passwordConfigured()) {
-    redirect(res, "/maintain?error=unconfigured");
+    redirect(res, `${back}?error=unconfigured`);
     return;
   }
   if (!passwordMatches(password)) {
     loginFailed(ip);
-    redirect(res, "/maintain?error=rejected");
+    redirect(res, `${back}?error=rejected`);
     return;
   }
   const token = sealSession();
-  redirect(res, "/maintain", { "Set-Cookie": sessionCookie(token, req) });
+  redirect(res, back, { "Set-Cookie": sessionCookie(token, req) });
 }
 
 function staticPath(urlPath) {
@@ -335,13 +396,46 @@ const server = createServer(async (req, res) => {
     const authed = readSession(req);
     console.log(`${req.method} ${path}`);
 
+    if (req.method === "GET" && path === "/api/live") {
+      await liveState(req, res);
+      return;
+    }
     if (req.method === "GET" && path === "/api/projects") {
       await publicProjects(req, res);
+      return;
+    }
+    if (req.method === "GET" && path === "/api/draft") {
+      if (!authed) {
+        text(res, 401, "Sign in required.");
+        return;
+      }
+      send(res, 200, projectJson(await listProjects()), {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "private, no-store",
+      });
       return;
     }
     const mediaMatch = path.match(/^\/media\/([^/]+)\/(before|after)$/);
     if (req.method === "GET" && mediaMatch) {
       await media(req, res, mediaMatch[1], mediaMatch[2]);
+      return;
+    }
+    const draftMatch = path.match(/^\/draft\/media\/([^/]+)\/(before|after)$/);
+    if (req.method === "GET" && draftMatch) {
+      if (!authed) {
+        text(res, 401, "Sign in required.");
+        return;
+      }
+      await draftMedia(req, res, draftMatch[1], draftMatch[2]);
+      return;
+    }
+    if (req.method === "GET" && path === "/preview") {
+      if (!authed) {
+        html(res, 200, loginPage(url.searchParams.get("error") || "", "/preview"));
+        return;
+      }
+      const current = await pointer();
+      html(res, 200, await renderPreview(url.searchParams.get("notice") || "", Boolean(current.previous_id)));
       return;
     }
     if (req.method === "GET" && (path === "/maintain" || path === "/maintain.html")) {
@@ -367,6 +461,16 @@ const server = createServer(async (req, res) => {
       }
       if (path === "/maintain/logout") {
         redirect(res, "/maintain", { "Set-Cookie": clearCookie(req) });
+        return;
+      }
+      if (path === "/maintain/publish") {
+        await publishDraft();
+        redirect(res, "/preview?notice=published");
+        return;
+      }
+      if (path === "/maintain/revert") {
+        const restored = await revertLive();
+        redirect(res, restored ? "/preview?notice=reverted" : "/preview");
         return;
       }
       if (path === "/maintain/save") {

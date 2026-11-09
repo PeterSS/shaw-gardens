@@ -186,6 +186,37 @@ nav a:hover {
   height: 3rem;
 }
 
+.banner {
+  margin: 0 0 1.5rem;
+  font-size: 1.15rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.preview-bar {
+  margin: 0 0 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--ink);
+}
+
+.preview-bar p {
+  margin: 0;
+}
+
+.preview-bar form {
+  display: inline;
+}
+
+.preview-bar button {
+  margin: 0.75rem 0.75rem 0 0;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
 .flyer {
   margin: 0 0 2rem;
 }

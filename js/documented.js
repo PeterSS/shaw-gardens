@@ -1,10 +1,16 @@
 const list = document.getElementById("documented-list");
 const liveOrigin = "https://shaw-gardens.apps.grok.bot";
+const preview = document.body.dataset.preview === "true";
 
 function projectBase() {
+  if (preview) return "";
   const host = location.hostname;
   if (host === "shaw-gardens.apps.grok.bot" || host === "127.0.0.1" || host === "localhost") return "";
   return liveOrigin;
+}
+
+function join(base, path) {
+  return `${base}${path}`;
 }
 
 function paragraph(text) {
@@ -25,23 +31,12 @@ function figure(src, caption) {
 }
 
 function mediaUrl(base, id, which, version) {
-  const path = `media/${encodeURIComponent(id)}/${which}?v=${encodeURIComponent(version)}`;
-  return base ? `${base}/${path}` : path;
+  const root = preview ? "/draft/media" : "/media";
+  const path = `${root}/${encodeURIComponent(id)}/${which}?v=${encodeURIComponent(version)}`;
+  return join(base, path);
 }
 
-async function load() {
-  if (!list) return;
-  const base = projectBase();
-  let projects;
-  try {
-    const response = await fetch(base ? `${base}/api/projects` : "api/projects", {
-      headers: { accept: "application/json" },
-    });
-    if (!response.ok) return;
-    projects = await response.json();
-  } catch {
-    return;
-  }
+function showProjects(projects, base) {
   list.replaceChildren();
   if (!Array.isArray(projects) || projects.length === 0) {
     list.append(paragraph("No projects yet."));
@@ -68,6 +63,34 @@ async function load() {
       article.append(label, paragraph(project.recommendations));
     }
     list.append(article);
+  }
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url, { headers: { accept: "application/json" } });
+  if (!response.ok) return null;
+  return response.json();
+}
+
+async function load() {
+  if (!list) return;
+  const base = projectBase();
+  try {
+    if (preview) {
+      const projects = await fetchJson(join(base, "/api/draft"));
+      if (projects) showProjects(projects, base);
+      return;
+    }
+    const live = await fetchJson(join(base, "/api/live"));
+    if (!live || live.kind !== "site") return;
+    const soon = document.getElementById("coming-soon");
+    const site = document.getElementById("site");
+    if (soon) soon.hidden = true;
+    if (site) site.hidden = false;
+    const projects = await fetchJson(join(base, "/api/projects"));
+    if (projects) showProjects(projects, base);
+  } catch {
+    return;
   }
 }
 
