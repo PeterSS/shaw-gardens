@@ -250,11 +250,15 @@ nav a:hover {
 }
 
 .documented {
-  margin-top: 2.5rem;
-  padding-top: 0.4rem;
+  margin-top: 0;
+  padding-top: 0;
 }
 
-.documented > h3,
+.documented .record:first-child {
+  border-top: 0;
+  padding-top: 0.2rem;
+}
+
 .record h3,
 .record h4,
 main h1,
@@ -270,8 +274,7 @@ main h1 {
   letter-spacing: 0.16em;
 }
 
-main h2,
-.documented > h3 {
+main h2 {
   margin: 2rem 0 0.8rem;
   font-size: 1.15rem;
 }

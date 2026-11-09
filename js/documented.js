@@ -44,7 +44,7 @@ async function load() {
   }
   list.replaceChildren();
   if (!Array.isArray(projects) || projects.length === 0) {
-    list.append(paragraph("No documented projects yet."));
+    list.append(paragraph("No projects yet."));
     return;
   }
   for (const project of projects) {
