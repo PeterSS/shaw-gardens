@@ -1,4 +1,11 @@
 const list = document.getElementById("documented-list");
+const liveOrigin = "https://shaw-gardens.apps.grok.bot";
+
+function projectBase() {
+  const host = location.hostname;
+  if (host === "shaw-gardens.apps.grok.bot" || host === "127.0.0.1" || host === "localhost") return "";
+  return liveOrigin;
+}
 
 function paragraph(text) {
   const p = document.createElement("p");
@@ -17,11 +24,19 @@ function figure(src, caption) {
   return fig;
 }
 
+function mediaUrl(base, id, which, version) {
+  const path = `media/${encodeURIComponent(id)}/${which}?v=${encodeURIComponent(version)}`;
+  return base ? `${base}/${path}` : path;
+}
+
 async function load() {
   if (!list) return;
+  const base = projectBase();
   let projects;
   try {
-    const response = await fetch("api/projects", { headers: { accept: "application/json" } });
+    const response = await fetch(base ? `${base}/api/projects` : "api/projects", {
+      headers: { accept: "application/json" },
+    });
     if (!response.ok) return;
     projects = await response.json();
   } catch {
@@ -42,9 +57,9 @@ async function load() {
     if (project.before || project.after) {
       const pair = document.createElement("div");
       pair.className = "pair";
-      const version = encodeURIComponent(project.updatedAt || "");
-      if (project.before) pair.append(figure(`media/${encodeURIComponent(project.id)}/before?v=${version}`, "Before"));
-      if (project.after) pair.append(figure(`media/${encodeURIComponent(project.id)}/after?v=${version}`, "After"));
+      const version = project.updatedAt || "";
+      if (project.before) pair.append(figure(mediaUrl(base, project.id, "before", version), "Before"));
+      if (project.after) pair.append(figure(mediaUrl(base, project.id, "after", version), "After"));
       article.append(pair);
     }
     if (project.recommendations) {

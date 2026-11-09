@@ -287,6 +287,17 @@ main h2,
   font-size: 1rem;
 }
 
+.record h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.35rem;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.record p {
+  margin: 0.35rem 0 0;
+}
+
 .record p,
 .maintain textarea {
   white-space: pre-wrap;
@@ -309,6 +320,13 @@ main h2,
   width: 100%;
   height: auto;
   border: 1px solid var(--ink);
+}
+
+.pair figcaption {
+  margin-top: 0.55rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .maintain {

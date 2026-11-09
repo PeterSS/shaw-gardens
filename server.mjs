@@ -38,6 +38,15 @@ const staticTypes = new Map([
 ]);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const pagesOrigin = "https://peterss.github.io";
+
+function pagesRead(req, headers) {
+  const shared = { Vary: "Origin", ...headers };
+  if (req.headers.origin === pagesOrigin) {
+    shared["Access-Control-Allow-Origin"] = pagesOrigin;
+  }
+  return shared;
+}
 
 function send(res, status, body, headers = {}) {
   const payload = Buffer.isBuffer(body) ? body : Buffer.from(body);
@@ -146,7 +155,7 @@ async function listProjects() {
   }));
 }
 
-async function publicProjects(res) {
+async function publicProjects(req, res) {
   const projects = await listProjects();
   send(res, 200, JSON.stringify(projects.map((project) => ({
     id: project.id,
@@ -156,13 +165,13 @@ async function publicProjects(res) {
     before: project.before,
     after: project.after,
     updatedAt: project.updatedAt,
-  }))), {
+  }))), pagesRead(req, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
-  });
+  }));
 }
 
-async function media(res, id, which) {
+async function media(req, res, id, which) {
   if (!UUID.test(id) || (which !== "before" && which !== "after")) {
     text(res, 404, "Not found");
     return;
@@ -176,10 +185,10 @@ async function media(res, id, which) {
     text(res, 404, "Not found");
     return;
   }
-  send(res, 200, image, {
+  send(res, 200, image, pagesRead(req, {
     "Content-Type": type,
     "Cache-Control": "public, max-age=3600",
-  });
+  }));
 }
 
 async function saveProject(req, res) {
@@ -327,12 +336,12 @@ const server = createServer(async (req, res) => {
     console.log(`${req.method} ${path}`);
 
     if (req.method === "GET" && path === "/api/projects") {
-      await publicProjects(res);
+      await publicProjects(req, res);
       return;
     }
     const mediaMatch = path.match(/^\/media\/([^/]+)\/(before|after)$/);
     if (req.method === "GET" && mediaMatch) {
-      await media(res, mediaMatch[1], mediaMatch[2]);
+      await media(req, res, mediaMatch[1], mediaMatch[2]);
       return;
     }
     if (req.method === "GET" && (path === "/maintain" || path === "/maintain.html")) {
