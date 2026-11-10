@@ -28,6 +28,16 @@ function figure(src, caption) {
   return fig;
 }
 
+function imageSrc(value, project, which, base) {
+  const id = String(project.id || "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return "";
+  if (typeof value === "string" && new RegExp(`^published/media/${id}/${which}\\.(jpg|png|gif|webp)$`).test(value)) {
+    return `${value}?v=${encodeURIComponent(project.updatedAt || "")}`;
+  }
+  if (value === true) return mediaUrl(base, project.id, which, project.updatedAt || "");
+  return "";
+}
+
 function mediaUrl(base, id, which, version) {
   const path = `/media/${encodeURIComponent(id)}/${which}?v=${encodeURIComponent(version)}`;
   return join(base, path);
@@ -49,10 +59,11 @@ function showProjects(projects, base) {
     if (project.before || project.after) {
       const pair = document.createElement("div");
       pair.className = "pair";
-      const version = project.updatedAt || "";
-      if (project.before) pair.append(figure(mediaUrl(base, project.id, "before", version), "Before"));
-      if (project.after) pair.append(figure(mediaUrl(base, project.id, "after", version), "After"));
-      article.append(pair);
+      const before = imageSrc(project.before, project, "before", base);
+      const after = imageSrc(project.after, project, "after", base);
+      if (before) pair.append(figure(before, "Before"));
+      if (after) pair.append(figure(after, "After"));
+      if (pair.childElementCount) article.append(pair);
     }
     if (project.recommendations) {
       const label = document.createElement("h4");
@@ -69,18 +80,33 @@ async function fetchJson(url) {
   return response.json();
 }
 
+function showSite(projects, base) {
+  const soon = document.getElementById("coming-soon");
+  const site = document.getElementById("site");
+  if (soon) soon.hidden = true;
+  if (site) site.hidden = false;
+  showProjects(Array.isArray(projects) ? projects : [], base);
+}
+
 async function load() {
   if (!list) return;
+  try {
+    const live = await fetchJson("published/live.json");
+    if (live) {
+      if (live.kind !== "site") return;
+      const projects = await fetchJson("published/projects.json");
+      showSite(projects, "");
+      return;
+    }
+  } catch {
+    return;
+  }
   const base = projectBase();
   try {
     const live = await fetchJson(join(base, "/api/live"));
     if (!live || live.kind !== "site") return;
-    const soon = document.getElementById("coming-soon");
-    const site = document.getElementById("site");
-    if (soon) soon.hidden = true;
-    if (site) site.hidden = false;
     const projects = await fetchJson(join(base, "/api/projects"));
-    if (projects) showProjects(projects, base);
+    showSite(projects, base);
   } catch {
     return;
   }

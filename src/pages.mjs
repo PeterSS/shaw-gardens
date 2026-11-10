@@ -94,14 +94,19 @@ function projectForm(project) {
   `;
 }
 
-export function editorPage(projects, error) {
+export function editorPage(projects, error, ready) {
   const message = error === "picture"
     ? "<p class=\"form-error\">Use a JPEG, PNG, WEBP, or GIF picture, up to 2 MB.</p>"
     : error === "title"
       ? "<p class=\"form-error\">A project needs a title.</p>"
       : error === "missing"
         ? "<p class=\"form-error\">That project is no longer there.</p>"
-        : "";
+        : error === "store"
+          ? "<p class=\"form-error\">The repository could not be updated. Try again once GH_TOKEN is set.</p>"
+          : "";
+  const repository = ready
+    ? ""
+    : "<p class=\"form-error\">Add the GH_TOKEN secret so drafts can be saved in the shaw-gardens repository.</p>";
   const items = projects.map((project) => `
     <article class="record">
       <h2>${esc(project.title)}</h2>
@@ -114,8 +119,9 @@ export function editorPage(projects, error) {
   `).join("");
   return shell("Maintain · Shaw Gardens", `
     <h1>Maintain</h1>
-    <p>Notes, recommendations, and pictures saved here show on the GitHub Pages preview. The public site changes from Publish Live on that page.</p>
+    <p>Notes, recommendations, and pictures saved here are written to the draft in the shaw-gardens repository. The public site changes from Publish Live on the preview page.</p>
     <p><a href="https://www.shawgardens.nz/preview/">Open the preview</a></p>
+    ${repository}
     ${message}
     <form method="post" action="/maintain/logout">
       <button type="submit">Sign out</button>
