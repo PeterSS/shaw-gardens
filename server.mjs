@@ -11,6 +11,7 @@ import {
   clearCookie,
   loginAllowed,
   loginFailed,
+  visitorKey,
   passwordConfigured,
   passwordMatches,
   readSession,
@@ -154,7 +155,7 @@ function imageType(bytes) {
 }
 
 function clientIp(req) {
-  return req.socket.remoteAddress || "unknown";
+  return visitorKey(req);
 }
 
 async function listProjects() {

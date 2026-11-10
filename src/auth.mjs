@@ -46,7 +46,12 @@ export function readSession(req) {
   const header = req.headers.cookie ?? "";
   for (const part of header.split(";")) {
     const [name, ...rest] = part.trim().split("=");
-    if (name === COOKIE) return sessionValid(decodeURIComponent(rest.join("=")));
+    if (name !== COOKIE) continue;
+    try {
+      return sessionValid(decodeURIComponent(rest.join("=")));
+    } catch {
+      return false;
+    }
   }
   return false;
 }
@@ -110,18 +115,29 @@ export function sameOrigin(req) {
 
 const attempts = new Map();
 
-export function loginAllowed(ip) {
+export function visitorKey(req) {
+  const socket = String(req.socket?.remoteAddress || "");
+  const real = firstHeader(req.headers["x-real-ip"]);
+  const forwarded = firstHeader(req.headers["x-forwarded-for"]).split(",")[0].trim();
+  const client = real || forwarded;
+  if (!client || client === socket) return "";
+  return client;
+}
+
+export function loginAllowed(key) {
+  if (!key) return true;
   const now = Date.now();
-  const entry = attempts.get(ip);
+  const entry = attempts.get(key);
   if (!entry || entry.reset < now) return true;
   return entry.count < 8;
 }
 
-export function loginFailed(ip) {
+export function loginFailed(key) {
+  if (!key) return;
   const now = Date.now();
-  const entry = attempts.get(ip);
+  const entry = attempts.get(key);
   if (!entry || entry.reset < now) {
-    attempts.set(ip, { count: 1, reset: now + 15 * 60 * 1000 });
+    attempts.set(key, { count: 1, reset: now + 15 * 60 * 1000 });
     return;
   }
   entry.count += 1;

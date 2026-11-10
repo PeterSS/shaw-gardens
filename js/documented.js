@@ -1,9 +1,7 @@
 const list = document.getElementById("documented-list");
 const liveOrigin = "https://shaw-gardens.apps.grok.bot";
-const preview = document.body.dataset.preview === "true";
 
 function projectBase() {
-  if (preview) return "";
   const host = location.hostname;
   if (host === "shaw-gardens.apps.grok.bot" || host === "127.0.0.1" || host === "localhost") return "";
   return liveOrigin;
@@ -31,8 +29,7 @@ function figure(src, caption) {
 }
 
 function mediaUrl(base, id, which, version) {
-  const root = preview ? "/draft/media" : "/media";
-  const path = `${root}/${encodeURIComponent(id)}/${which}?v=${encodeURIComponent(version)}`;
+  const path = `/media/${encodeURIComponent(id)}/${which}?v=${encodeURIComponent(version)}`;
   return join(base, path);
 }
 
@@ -76,11 +73,6 @@ async function load() {
   if (!list) return;
   const base = projectBase();
   try {
-    if (preview) {
-      const projects = await fetchJson(join(base, "/api/draft"));
-      if (projects) showProjects(projects, base);
-      return;
-    }
     const live = await fetchJson(join(base, "/api/live"));
     if (!live || live.kind !== "site") return;
     const soon = document.getElementById("coming-soon");
