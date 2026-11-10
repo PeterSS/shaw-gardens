@@ -1,4 +1,5 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { sql } from "./db.mjs";
 
 const COOKIE = "sg_session";
 const FOURTEEN_DAYS = 14 * 24 * 60 * 60 * 1000;
@@ -14,46 +15,43 @@ export function passwordMatches(given) {
   return expected.length > 0 && timingSafeEqual(left, right);
 }
 
-function signingKey() {
-  if (!passwordConfigured()) return null;
-  return createHash("sha256").update(`shaw-gardens-session:${process.env.MAINTENANCE_PASSWORD}`, "utf8").digest();
-}
+const SESSION_ID = /^[A-Za-z0-9_-]{43}$/;
 
-export function sealSession() {
-  const key = signingKey();
-  if (!key) return null;
-  const body = String(Date.now() + FOURTEEN_DAYS);
-  const mac = createHmac("sha256", key).update(body).digest("base64url");
-  return `${body}.${mac}`;
-}
-
-export function sessionValid(token) {
-  const key = signingKey();
-  if (!key || !token) return false;
-  const dot = token.lastIndexOf(".");
-  if (dot <= 0) return false;
-  const body = token.slice(0, dot);
-  const mac = token.slice(dot + 1);
-  const expected = createHmac("sha256", key).update(body).digest("base64url");
-  const left = Buffer.from(mac);
-  const right = Buffer.from(expected);
-  if (left.length !== right.length || !timingSafeEqual(left, right)) return false;
-  const exp = Number(body);
-  return Number.isFinite(exp) && Date.now() < exp;
-}
-
-export function readSession(req) {
+function sessionId(req) {
   const header = req.headers.cookie ?? "";
   for (const part of header.split(";")) {
     const [name, ...rest] = part.trim().split("=");
     if (name !== COOKIE) continue;
     try {
-      return sessionValid(decodeURIComponent(rest.join("=")));
+      return decodeURIComponent(rest.join("="));
     } catch {
-      return false;
+      return "";
     }
   }
-  return false;
+  return "";
+}
+
+export async function createSession() {
+  const id = randomBytes(32).toString("base64url");
+  await sql("delete from sessions where expires_at <= now()");
+  await sql(
+    "insert into sessions (id, expires_at) values ($1, now() + interval '14 days')",
+    [id],
+  );
+  return id;
+}
+
+export async function readSession(req) {
+  const id = sessionId(req);
+  if (!SESSION_ID.test(id)) return false;
+  const rows = await sql("select id from sessions where id = $1 and expires_at > now()", [id]);
+  return rows.length === 1;
+}
+
+export async function endSession(req) {
+  const id = sessionId(req);
+  if (!SESSION_ID.test(id)) return;
+  await sql("delete from sessions where id = $1", [id]);
 }
 
 function cookieFlags(req) {
@@ -115,29 +113,43 @@ export function sameOrigin(req) {
 
 const attempts = new Map();
 
+function privatePeer(address) {
+  const addr = String(address || "").replace(/^::ffff:/i, "").toLowerCase();
+  if (addr === "127.0.0.1" || addr === "::1") return true;
+  if (addr.startsWith("10.") || addr.startsWith("192.168.") || addr.startsWith("169.254.")) return true;
+  const octets = addr.match(/^172\.(\d+)\./);
+  if (octets) {
+    const second = Number(octets[1]);
+    if (second >= 16 && second <= 31) return true;
+  }
+  return addr.startsWith("fc") || addr.startsWith("fd") || addr.startsWith("fe80:");
+}
+
 export function visitorKey(req) {
-  const socket = String(req.socket?.remoteAddress || "");
-  const real = firstHeader(req.headers["x-real-ip"]);
-  const forwarded = firstHeader(req.headers["x-forwarded-for"]).split(",")[0].trim();
-  const client = real || forwarded;
-  if (!client || client === socket) return "";
-  return client;
+  const socket = String(req.socket?.remoteAddress || "unknown");
+  if (!privatePeer(socket)) return `peer:${socket}`;
+  const forwarded = req.headers["x-forwarded-for"];
+  const raw = Array.isArray(forwarded) ? forwarded.join(",") : String(forwarded ?? "");
+  const hops = raw.split(",").map((part) => part.trim()).filter(Boolean);
+  const client = hops.length ? hops[hops.length - 1] : "";
+  const bareSocket = socket.replace(/^::ffff:/i, "");
+  if (!client || client === socket || client === bareSocket) return `peer:${socket}`;
+  return `client:${client}`;
 }
 
 export function loginAllowed(key) {
-  if (!key) return true;
   const now = Date.now();
-  const entry = attempts.get(key);
+  const entry = attempts.get(key || "peer:unknown");
   if (!entry || entry.reset < now) return true;
   return entry.count < 8;
 }
 
 export function loginFailed(key) {
-  if (!key) return;
   const now = Date.now();
-  const entry = attempts.get(key);
+  const name = key || "peer:unknown";
+  const entry = attempts.get(name);
   if (!entry || entry.reset < now) {
-    attempts.set(key, { count: 1, reset: now + 15 * 60 * 1000 });
+    attempts.set(name, { count: 1, reset: now + 15 * 60 * 1000 });
     return;
   }
   entry.count += 1;

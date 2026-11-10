@@ -14,9 +14,10 @@ import {
   visitorKey,
   passwordConfigured,
   passwordMatches,
+  createSession,
+  endSession,
   readSession,
   sameOrigin,
-  sealSession,
   sessionCookie,
 } from "./src/auth.mjs";
 import { editorPage, loginPage } from "./src/pages.mjs";
@@ -71,6 +72,8 @@ function send(res, status, body, headers = {}) {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "same-origin",
     ...headers,
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'",
   });
   res.end(payload);
 }
@@ -345,7 +348,7 @@ async function login(req, res) {
     redirect(res, next === previewPage ? `/maintain?error=rejected&next=${encodeURIComponent(previewPage)}` : "/maintain?error=rejected");
     return;
   }
-  const token = sealSession();
+  const token = await createSession();
   redirect(res, dest, { "Set-Cookie": sessionCookie(token, req) });
 }
 
@@ -379,7 +382,7 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url || "/", "http://localhost");
     const path = url.pathname.replace(/\/+$/, "") || "/";
-    const authed = readSession(req);
+    const authed = await readSession(req);
     console.log(`${req.method} ${path}`);
 
     if (req.method === "GET" && path === "/api/live") {
@@ -471,6 +474,7 @@ const server = createServer(async (req, res) => {
         return;
       }
       if (path === "/maintain/logout") {
+        await endSession(req);
         redirect(res, "/maintain", { "Set-Cookie": clearCookie(req) });
         return;
       }
