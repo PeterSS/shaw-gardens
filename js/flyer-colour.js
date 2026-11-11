@@ -32,7 +32,7 @@ function mount(img, ink, colour) {
   buffer.width = width;
   buffer.height = height;
   const bufferCtx = buffer.getContext("2d");
-  const radius = Math.max(36, width * 0.055);
+  const radius = Math.max(96, width * 0.16);
   let frame = 0;
   let last = null;
   let touching = false;
