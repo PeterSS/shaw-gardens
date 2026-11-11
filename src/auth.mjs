@@ -1,5 +1,4 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { sql } from "./db.mjs";
 
 const COOKIE = "sg_session";
 const FOURTEEN_DAYS = 14 * 24 * 60 * 60 * 1000;
@@ -16,6 +15,7 @@ export function passwordMatches(given) {
 }
 
 const SESSION_ID = /^[A-Za-z0-9_-]{43}$/;
+const sessions = new Map();
 
 function sessionId(req) {
   const header = req.headers.cookie ?? "";
@@ -31,27 +31,35 @@ function sessionId(req) {
   return "";
 }
 
+function pruneSessions() {
+  const now = Date.now();
+  for (const [id, expires] of sessions) {
+    if (expires <= now) sessions.delete(id);
+  }
+}
+
 export async function createSession() {
+  pruneSessions();
   const id = randomBytes(32).toString("base64url");
-  await sql("delete from sessions where expires_at <= now()");
-  await sql(
-    "insert into sessions (id, expires_at) values ($1, now() + interval '14 days')",
-    [id],
-  );
+  sessions.set(id, Date.now() + FOURTEEN_DAYS);
   return id;
 }
 
 export async function readSession(req) {
   const id = sessionId(req);
   if (!SESSION_ID.test(id)) return false;
-  const rows = await sql("select id from sessions where id = $1 and expires_at > now()", [id]);
-  return rows.length === 1;
+  const expires = sessions.get(id);
+  if (!expires || expires <= Date.now()) {
+    sessions.delete(id);
+    return false;
+  }
+  return true;
 }
 
 export async function endSession(req) {
   const id = sessionId(req);
   if (!SESSION_ID.test(id)) return;
-  await sql("delete from sessions where id = $1", [id]);
+  sessions.delete(id);
 }
 
 function cookieFlags(req) {

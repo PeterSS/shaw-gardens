@@ -6,7 +6,6 @@ chdir(fileURLToPath(new URL(".", import.meta.url)));
 import { randomUUID } from "node:crypto";
 import { extname, normalize, resolve, sep } from "node:path";
 import { readFile } from "node:fs/promises";
-import { asBuffer, sql } from "./src/db.mjs";
 import {
   clearCookie,
   loginAllowed,
@@ -22,13 +21,19 @@ import {
 } from "./src/auth.mjs";
 import { editorPage, loginPage } from "./src/pages.mjs";
 import {
+  deleteDraft,
+  draftImage,
+  hasPrevious,
+  listDrafts,
   liveStatus,
-  pointer,
   publishDraft,
   publishedImage,
   publishedProjects,
+  readDraft,
+  repositoryReady,
   revertLive,
-} from "./src/editions.mjs";
+  saveDraft,
+} from "./src/store.mjs";
 
 const root = resolve(process.cwd());
 const port = Number(process.env.PORT) || 8787;
@@ -179,24 +184,9 @@ function clientIp(req) {
   return visitorKey(req);
 }
 
-async function listProjects() {
-  const rows = await sql(
-    `select id, title, notes, recommendations,
-            before_type is not null as before,
-            after_type is not null as after,
-            updated_at
-     from projects
-     order by updated_at desc`,
-  );
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    notes: row.notes,
-    recommendations: row.recommendations,
-    before: Boolean(row.before),
-    after: Boolean(row.after),
-    updatedAt: new Date(row.updated_at).toISOString(),
-  }));
+function imageRecord(value) {
+  if (!value || value.empty) return null;
+  return { bytes: value.bytes, type: value.type };
 }
 
 function projectJson(projects) {
@@ -228,7 +218,7 @@ async function liveState(req, res) {
 }
 
 function sendImage(req, res, row, cache) {
-  const image = asBuffer(row?.image);
+  const image = Buffer.isBuffer(row?.image) ? row.image : null;
   const type = row?.type;
   if (!image || !type || !["image/jpeg", "image/png", "image/gif", "image/webp"].includes(type)) {
     text(res, 404, "Not found");
@@ -246,14 +236,6 @@ async function media(req, res, id, which) {
     return;
   }
   sendImage(req, res, await publishedImage(id, which), "public, max-age=3600");
-}
-
-async function draftImage(id, which) {
-  if (!UUID.test(id) || (which !== "before" && which !== "after")) return null;
-  const rows = which === "before"
-    ? await sql("select before_image as image, before_type as type from projects where id = $1", [id])
-    : await sql("select after_image as image, after_type as type from projects where id = $1", [id]);
-  return rows[0] || null;
 }
 
 async function saveProject(req, res) {
@@ -277,62 +259,53 @@ async function saveProject(req, res) {
     redirect(res, "/maintain?error=picture");
     return;
   }
-  if (!editing) {
-    await sql(
-      `insert into projects
-        (id, title, notes, recommendations, before_image, before_type, after_image, after_type)
-       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        randomUUID(),
+  try {
+    if (!editing) {
+      const saved = await saveDraft({
+        creating: true,
+        id: randomUUID(),
         title,
         notes,
         recommendations,
-        before.empty ? null : before.bytes,
-        before.empty ? null : before.type,
-        after.empty ? null : after.bytes,
-        after.empty ? null : after.type,
-      ],
-    );
-    redirect(res, "/maintain");
+        before: imageRecord(before),
+        after: imageRecord(after),
+      });
+      if (!saved) {
+        redirect(res, "/maintain?error=store");
+        return;
+      }
+      redirect(res, "/maintain");
+      return;
+    }
+    const existing = await readDraft(idValue);
+    if (!existing) {
+      redirect(res, "/maintain?error=missing");
+      return;
+    }
+    let beforeImage = existing.before;
+    let afterImage = existing.after;
+    if (data.get("remove_before")) beforeImage = null;
+    if (data.get("remove_after")) afterImage = null;
+    if (!before.empty) beforeImage = imageRecord(before);
+    if (!after.empty) afterImage = imageRecord(after);
+    const saved = await saveDraft({
+      creating: false,
+      id: idValue,
+      title,
+      notes,
+      recommendations,
+      before: beforeImage,
+      after: afterImage,
+    });
+    if (!saved) {
+      redirect(res, "/maintain?error=missing");
+      return;
+    }
+  } catch {
+    console.error("repository update failed");
+    redirect(res, "/maintain?error=store");
     return;
   }
-  const existing = await sql(
-    "select id, before_image, before_type, after_image, after_type from projects where id = $1",
-    [idValue],
-  );
-  if (existing.length === 0) {
-    redirect(res, "/maintain?error=missing");
-    return;
-  }
-  const current = existing[0];
-  let beforeImage = asBuffer(current.before_image);
-  let beforeType = current.before_type;
-  let afterImage = asBuffer(current.after_image);
-  let afterType = current.after_type;
-  if (data.get("remove_before")) {
-    beforeImage = null;
-    beforeType = null;
-  }
-  if (data.get("remove_after")) {
-    afterImage = null;
-    afterType = null;
-  }
-  if (!before.empty) {
-    beforeImage = before.bytes;
-    beforeType = before.type;
-  }
-  if (!after.empty) {
-    afterImage = after.bytes;
-    afterType = after.type;
-  }
-  await sql(
-    `update projects
-     set title = $2, notes = $3, recommendations = $4,
-         before_image = $5, before_type = $6, after_image = $7, after_type = $8,
-         updated_at = now()
-     where id = $1`,
-    [idValue, title, notes, recommendations, beforeImage, beforeType, afterImage, afterType],
-  );
   redirect(res, "/maintain");
 }
 
@@ -343,7 +316,13 @@ async function deleteProject(req, res) {
     redirect(res, "/maintain?error=missing");
     return;
   }
-  await sql("delete from projects where id = $1", [id]);
+  try {
+    await deleteDraft(id);
+  } catch {
+    console.error("repository update failed");
+    redirect(res, "/maintain?error=store");
+    return;
+  }
   redirect(res, "/maintain");
 }
 
@@ -375,6 +354,7 @@ function staticPath(urlPath) {
   const cleaned = normalize(decoded).replace(/^(\.\.(\/|\\|$))+/, "");
   const relative = cleaned.replace(/^[/\\]+/, "");
   if (relative === "_preview" || relative.startsWith(`_preview${sep}`) || relative.startsWith("_preview/")) return null;
+  if (relative === ".local-store" || relative.startsWith(`.local-store${sep}`) || relative.startsWith(".local-store/")) return null;
   const full = resolve(root, relative);
   if (full !== root && !full.startsWith(root + sep)) return null;
   const ext = extname(full).toLowerCase();
@@ -424,10 +404,9 @@ const server = createServer(async (req, res) => {
         deny(req, res);
         return;
       }
-      const current = await pointer();
       send(res, 200, JSON.stringify({
-        projects: JSON.parse(projectJson(await listProjects())),
-        previous: Boolean(current.previous_id),
+        projects: JSON.parse(projectJson(await listDrafts())),
+        previous: await hasPrevious(),
       }), pagesRead(req, {
         "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "private, no-store",
@@ -441,7 +420,7 @@ const server = createServer(async (req, res) => {
         return;
       }
       const row = await draftImage(draftMatch[1], draftMatch[2]);
-      const image = asBuffer(row?.image);
+      const image = Buffer.isBuffer(row?.image) ? row.image : null;
       const type = row?.type;
       if (!image || !type || !["image/jpeg", "image/png", "image/gif", "image/webp"].includes(type)) {
         text(res, 404, "Not found");
@@ -465,7 +444,7 @@ const server = createServer(async (req, res) => {
         redirect(res, next);
         return;
       }
-      html(res, 200, editorPage(await listProjects(), url.searchParams.get("error") || ""));
+      html(res, 200, editorPage(await listDrafts(), url.searchParams.get("error") || "", repositoryReady()));
       return;
     }
     if (req.method === "POST" && (path === "/api/publish" || path === "/api/revert")) {

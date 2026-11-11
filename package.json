@@ -4,13 +4,9 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "build": "node scripts/migrate.mjs"
+    "build": "node -e \"process.exit(0)\""
   },
   "engines": {
     "node": ">=20"
-  },
-  "dependencies": {
-    "@electric-sql/pglite": "^0.3.14",
-    "pg": "^8.16.3"
   }
 }
