@@ -48,21 +48,39 @@ const staticTypes = new Map([
 ]);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const pagesOrigin = "https://peterss.github.io";
+const pagesOrigins = new Set([
+  "https://shawgardens.nz",
+  "https://www.shawgardens.nz",
+]);
 
-const previewPage = "https://peterss.github.io/shaw-gardens/preview/";
+const previewPage = "https://www.shawgardens.nz/preview/";
+const previewPages = new Set([
+  previewPage,
+  "https://shawgardens.nz/preview/",
+  "https://peterss.github.io/shaw-gardens/preview/",
+]);
+
+function allowedPagesOrigin(req) {
+  const origin = req.headers.origin;
+  return pagesOrigins.has(origin) ? origin : "";
+}
 
 function pagesRead(req, headers) {
   const shared = { Vary: "Origin", ...headers };
-  if (req.headers.origin === pagesOrigin) {
-    shared["Access-Control-Allow-Origin"] = pagesOrigin;
+  const origin = allowedPagesOrigin(req);
+  if (origin) {
+    shared["Access-Control-Allow-Origin"] = origin;
     shared["Access-Control-Allow-Credentials"] = "true";
   }
   return shared;
 }
 
 function previewCaller(req) {
-  return req.headers.origin === pagesOrigin || sameOrigin(req);
+  return Boolean(allowedPagesOrigin(req)) || sameOrigin(req);
+}
+
+function previewTarget(next) {
+  return previewPages.has(next) ? previewPage : "";
 }
 
 function send(res, status, body, headers = {}) {
@@ -336,8 +354,8 @@ async function login(req, res) {
     return;
   }
   const data = await formData(req);
-  const next = String(data.get("next") || "");
-  const dest = next === previewPage ? previewPage : "/maintain";
+  const next = previewTarget(String(data.get("next") || ""));
+  const dest = next || "/maintain";
   const password = String(data.get("password") || "");
   if (!passwordConfigured()) {
     redirect(res, "/maintain?error=unconfigured");
@@ -345,7 +363,7 @@ async function login(req, res) {
   }
   if (!passwordMatches(password)) {
     loginFailed(ip);
-    redirect(res, next === previewPage ? `/maintain?error=rejected&next=${encodeURIComponent(previewPage)}` : "/maintain?error=rejected");
+    redirect(res, next ? `/maintain?error=rejected&next=${encodeURIComponent(next)}` : "/maintain?error=rejected");
     return;
   }
   const token = await createSession();
@@ -393,7 +411,7 @@ const server = createServer(async (req, res) => {
       await publicProjects(req, res);
       return;
     }
-    if (req.method === "OPTIONS" && req.headers.origin === pagesOrigin) {
+    if (req.method === "OPTIONS" && allowedPagesOrigin(req)) {
       send(res, 204, "", pagesRead(req, {
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Accept",
@@ -438,13 +456,13 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET" && (path === "/maintain" || path === "/maintain.html")) {
-      const next = url.searchParams.get("next") || "";
+      const next = previewTarget(url.searchParams.get("next") || "");
       if (!authed) {
-        html(res, 200, loginPage(url.searchParams.get("error") || "", next === previewPage ? next : ""));
+        html(res, 200, loginPage(url.searchParams.get("error") || "", next));
         return;
       }
-      if (next === previewPage) {
-        redirect(res, previewPage);
+      if (next) {
+        redirect(res, next);
         return;
       }
       html(res, 200, editorPage(await listProjects(), url.searchParams.get("error") || ""));

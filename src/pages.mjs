@@ -36,7 +36,7 @@ function shell(title, main) {
 </html>`;
 }
 
-const previewPage = "https://peterss.github.io/shaw-gardens/preview/";
+const previewPage = "https://www.shawgardens.nz/preview/";
 
 export function loginPage(error, next) {
   const message = error === "unconfigured"
@@ -115,7 +115,7 @@ export function editorPage(projects, error) {
   return shell("Maintain · Shaw Gardens", `
     <h1>Maintain</h1>
     <p>Notes, recommendations, and pictures saved here show on the GitHub Pages preview. The public site changes from Publish Live on that page.</p>
-    <p><a href="https://peterss.github.io/shaw-gardens/preview/">Open the preview</a></p>
+    <p><a href="https://www.shawgardens.nz/preview/">Open the preview</a></p>
     ${message}
     <form method="post" action="/maintain/logout">
       <button type="submit">Sign out</button>
