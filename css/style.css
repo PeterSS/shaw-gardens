@@ -221,11 +221,21 @@ nav a:hover {
   margin: 0 0 2rem;
 }
 
-.flyer img {
+.flyer img,
+.flyer canvas {
   display: block;
   width: 100%;
   height: auto;
   border: 1px solid var(--ink);
+  touch-action: none;
+}
+
+.flyer canvas {
+  cursor: crosshair;
+}
+
+.flyer img[hidden] {
+  display: none;
 }
 
 .flyer figcaption {
