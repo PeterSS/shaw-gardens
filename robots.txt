@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /preview
+Disallow: /maintain
+
+Sitemap: https://www.shawgardens.nz/sitemap.xml
