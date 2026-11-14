@@ -55,6 +55,23 @@ const tools = {
   `),
 };
 
+const gardener = toolDrawing(`
+  <path d="M16 22h36"/>
+  <path d="M24 22c2-11 18-13 24-2"/>
+  <circle cx="34" cy="30" r="7"/>
+  <path d="M32 37c2 7 3 12 6 18"/>
+  <path d="M35 44c9 3 16 8 20 12"/>
+  <path d="M33 43c-10 2-16 8-14 14"/>
+  <path d="M38 55c10 1 20 1 28-3"/>
+  <path d="M64 52c6 6 6 14 2 20"/>
+  <path d="M62 72h14"/>
+  <path d="M40 55c-2 8 6 14 14 12"/>
+  <path d="M48 67c2 4 2 6 0 8"/>
+`);
+
+const idleMs = 30000;
+const revertMs = 15000;
+
 function classifyRegion(r, g, b, y, height) {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
@@ -129,6 +146,14 @@ function mount(img, ink, colour) {
   let toolName = "";
   let pendingTool = "";
   let showing = false;
+  let resting = false;
+  let painted = false;
+  let reveal = 1;
+  let fading = false;
+  let revertFrame = 0;
+  let idleTimer = 0;
+  let activity = null;
+  let pointer = null;
 
   function colourAt(x, y) {
     const ix = Math.max(0, Math.min(width - 1, Math.round(x)));
@@ -176,24 +201,57 @@ function mount(img, ink, colour) {
     sprite.innerHTML = tools[best];
   }
 
-  function placeTool(event) {
-    const fig = canvas.parentElement.getBoundingClientRect();
-    const x = event.clientX - fig.left;
-    const y = event.clientY - fig.top;
-    const spriteWidth = sprite.offsetWidth;
-    const spriteHeight = sprite.offsetHeight;
-    const lift = event.pointerType === "mouse" ? 0 : spriteHeight * 0.85;
-    sprite.style.transform = `translate(${x - spriteWidth / 2}px, ${y - spriteHeight / 2 - lift}px)`;
+  // The steps are the seat. Neither photograph has a bench, and the treads are where someone sits.
+  function isSeat(x, y) {
+    const nx = x / width;
+    const ny = y / height;
+    if (toolName !== "rake") return false;
+    return nx >= 0.44 && nx <= 0.68 && ny >= 0.56 && ny <= 0.75;
   }
 
-  function showTool(event) {
+  function placeTool(event) {
+    const fig = canvas.parentElement.getBoundingClientRect();
+    pointer = {
+      x: event.clientX - fig.left,
+      y: event.clientY - fig.top,
+      touch: event.pointerType !== "mouse",
+    };
+    applyPointer();
+  }
+
+  function applyPointer() {
+    if (!pointer || sprite.hidden) return;
+    const spriteWidth = sprite.offsetWidth;
+    const spriteHeight = sprite.offsetHeight;
+    const lift = pointer.touch && !resting ? spriteHeight * 0.85 : 0;
+    const sit = resting ? spriteHeight * 0.2 : 0;
+    sprite.style.transform = `translate(${pointer.x - spriteWidth / 2}px, ${pointer.y - spriteHeight / 2 - lift + sit}px)`;
+  }
+
+  function showTool(event, here) {
     if (!showing) {
       showing = true;
       sprite.hidden = false;
       canvas.classList.add("with-tool");
     }
-    selectTool(point(event));
+    if (resting) {
+      placeTool(event);
+      return;
+    }
+    selectTool(here);
     placeTool(event);
+  }
+
+  function showGardener() {
+    resting = true;
+    toolName = "";
+    pendingTool = "";
+    showing = true;
+    sprite.hidden = false;
+    canvas.classList.add("with-tool");
+    sprite.dataset.tool = "gardener";
+    sprite.innerHTML = gardener;
+    applyPointer();
   }
 
   function hideTool() {
@@ -205,9 +263,13 @@ function mount(img, ink, colour) {
   function render() {
     frame = 0;
     ctx.drawImage(ink, 0, 0, width, height);
+    if (!painted || reveal <= 0) return;
+    bufferCtx.globalAlpha = 1;
     bufferCtx.globalCompositeOperation = "source-over";
     bufferCtx.clearRect(0, 0, width, height);
+    bufferCtx.globalAlpha = reveal;
     bufferCtx.drawImage(colour, 0, 0, width, height);
+    bufferCtx.globalAlpha = 1;
     bufferCtx.globalCompositeOperation = "destination-in";
     bufferCtx.drawImage(mask, 0, 0);
     ctx.drawImage(buffer, 0, 0);
@@ -217,7 +279,75 @@ function mount(img, ink, colour) {
     if (!frame) frame = requestAnimationFrame(render);
   }
 
+  function scheduleIdle() {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(onIdle, idleMs);
+  }
+
+  function onIdle() {
+    idleTimer = 0;
+    if (showing && activity && isSeat(activity.x, activity.y)) {
+      showGardener();
+      return;
+    }
+    beginRevert();
+  }
+
+  function finishRevert() {
+    fading = false;
+    revertFrame = 0;
+    reveal = 1;
+    painted = false;
+    maskCtx.clearRect(0, 0, width, height);
+    requestRender();
+  }
+
+  function beginRevert() {
+    if (!painted || fading) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      finishRevert();
+      return;
+    }
+    const started = performance.now();
+    const from = reveal;
+    fading = true;
+    function step(now) {
+      if (!fading) return;
+      const t = Math.min(1, (now - started) / revertMs);
+      if (t >= 1) {
+        finishRevert();
+        return;
+      }
+      const eased = t * t * (3 - 2 * t);
+      reveal = from * (1 - eased);
+      requestRender();
+      revertFrame = requestAnimationFrame(step);
+    }
+    revertFrame = requestAnimationFrame(step);
+  }
+
+  function cancelRevert() {
+    if (!fading && reveal === 1) return;
+    fading = false;
+    cancelAnimationFrame(revertFrame);
+    revertFrame = 0;
+    if (reveal !== 1) {
+      reveal = 1;
+      requestRender();
+    }
+  }
+
+  function noteWork(here, force) {
+    if (!force && activity && Math.hypot(here.x - activity.x, here.y - activity.y) < 12) return false;
+    activity = { x: here.x, y: here.y };
+    resting = false;
+    cancelRevert();
+    scheduleIdle();
+    return true;
+  }
+
   function stamp(point) {
+    painted = true;
     const brush = maskCtx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
     brush.addColorStop(0, "rgba(0, 0, 0, 0.16)");
     brush.addColorStop(0.55, "rgba(0, 0, 0, 0.05)");
@@ -252,15 +382,23 @@ function mount(img, ink, colour) {
     const touch = event.pointerType !== "mouse";
     touching = false;
     last = null;
-    if (touch) hideTool();
+    if (!touch) return;
+    if (activity && isSeat(activity.x, activity.y)) {
+      scheduleIdle();
+      return;
+    }
+    resting = false;
+    hideTool();
+    scheduleIdle();
   }
 
   canvas.addEventListener("pointerdown", (event) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     touching = true;
     canvas.setPointerCapture(event.pointerId);
-    showTool(event);
     const here = point(event);
+    noteWork(here, true);
+    showTool(event, here);
     if (last) stroke(last, here);
     else stamp(here);
     last = here;
@@ -269,8 +407,13 @@ function mount(img, ink, colour) {
   canvas.addEventListener("pointermove", (event) => {
     const mouse = event.pointerType === "mouse";
     if (!mouse && !touching) return;
-    showTool(event);
     const here = point(event);
+    const working = noteWork(here, false);
+    if (resting && !working) {
+      placeTool(event);
+      return;
+    }
+    showTool(event, here);
     if (last) stroke(last, here);
     else stamp(here);
     last = here;
@@ -281,7 +424,10 @@ function mount(img, ink, colour) {
   canvas.addEventListener("pointerleave", (event) => {
     if (event.pointerType === "mouse" && !touching) {
       last = null;
+      const wasResting = resting;
+      resting = false;
       hideTool();
+      if (wasResting) scheduleIdle();
     }
   });
 
