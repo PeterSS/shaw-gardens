@@ -11,8 +11,10 @@ test("the public page names the business, the place, and the work", () => {
   assert.match(index, /rel="canonical" href="https:\/\/www\.shawgardens\.nz\/"/);
   assert.match(index, /"@type": "LandscapeService"/);
   assert.match(index, /Garden maintenance, landscaping, lawncare, topiary, and design/);
-  assert.match(index, /<h1 class="wordmark">Shaw Gardens<\/h1>/);
-  assert.match(index, /href="tel:\+642108378589"/);
+  assert.match(index, /"telephone": "\+642108378589"/);
+  const comingSoon = index.slice(index.indexOf('id="coming-soon"'), index.indexOf('id="site"'));
+  assert.match(comingSoon, /<figure class="flyer">/);
+  assert.doesNotMatch(comingSoon, /<h1|class="place"|class="services"|class="methods"|mailto:|tel:/);
 });
 
 test("crawlers are sent to the public page and kept out of the private ones", () => {
