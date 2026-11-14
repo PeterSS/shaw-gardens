@@ -219,6 +219,7 @@ nav a:hover {
 }
 
 .flyer {
+  position: relative;
   margin: 0 0 2rem;
 }
 
@@ -233,6 +234,24 @@ nav a:hover {
 
 .flyer canvas {
   cursor: crosshair;
+}
+
+.flyer canvas.with-tool {
+  cursor: none;
+}
+
+.tool-sprite {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 7rem;
+  height: 7rem;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tool-sprite[hidden] {
+  display: none;
 }
 
 .flyer img[hidden] {
@@ -453,6 +472,11 @@ footer a {
   nav {
     gap: 0.15rem 1rem;
   }
+
+  .tool-sprite {
+    width: 5.25rem;
+    height: 5.25rem;
+  }
 }
 
 @media print {
@@ -463,7 +487,8 @@ footer a {
     color: black;
   }
 
-  nav {
+  nav,
+  .tool-sprite {
     display: none;
   }
 
